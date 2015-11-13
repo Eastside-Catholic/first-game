@@ -26,8 +26,8 @@ public class Powerup {
 		powerupAbility = pwrup;
 	}
 	
-	public boolean isTouching(float x, float y, int width, int height){
-		if(position.x >= x && position.x <= x + width && position.y >= y && position.y <= y + height + 8)
+	public boolean isTouching(Rectangle otherHitbox){
+		if(hitbox.overlaps(otherHitbox))
 			return true;
 		return false;
 	}

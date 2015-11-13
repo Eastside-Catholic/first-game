@@ -33,7 +33,9 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 	Texture healthBar;
 	boolean invincible = false;
 	int invincibilityCounter = 0;
+	int powerupCounter = 0;
 	
+	//Initiate all the arrays of various game objects
 	List<Bullet> bullets = new ArrayList<Bullet>();
 	List<Integer> bulletsToDelete = new ArrayList<Integer>();
 	List<Integer> enemiesToDelete = new ArrayList<Integer>();
@@ -41,10 +43,11 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 	List<Powerup> powerups = new ArrayList<Powerup>();
 	List<Integer> powerupsToDelete = new ArrayList<Integer>();
 	
+	Powerup currentPowerup;
+	
 	boolean shooting = false, fired = false;
 	boolean playerAlive = true;
 	
-		
 	Animation playerAnimation, enemyAnimation;
 	Texture playerSpriteSheet, enemySpriteSheet;
 	TextureRegion playerCurrentFrame, enemyCurrentFrame;
@@ -52,36 +55,38 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 	float frameTime;
 	
 	final int DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3, DOWNLEFT = 4, DOWNRIGHT = 5, UPLEFT = 6, UPRIGHT = 7;
-	final int SCREEN_WIDTH = 640, SCREEN_HEIGHT = 480;
-	int direction = DOWN, prevDirection;
+	final int SCREEN_WIDTH = 660, SCREEN_HEIGHT = 480;
+	
+	Integer level = 1;
 	
 	int screen = 0;
-	final int GAME_SCREEN = 0, WIN_SCREEN = 1, LOSE_SCREEN = 2, TEST_SCREEN = 3;
+	final int GAME_SCREEN = 0, LOSE_SCREEN = 1, TEST_SCREEN = 2;
 	
 	int playerPower = 0;
 	final int NORMAL_SHOT = 0, TRIPLE_SHOT = 1;
 	
 	final int FULL_HEALTH = 6, HEALTH_1 = 5, HEALTH_2 = 4, HEALTH_3 = 3, HEALTH_4 = 2, LOW_HEALTH = 1, NO_HEALTH = 0;
 	int playerHealth = FULL_HEALTH;
-	
+		
 	int enemyMoveNumber = 1;
 	
 	Integer score = 0;
 	int health = 10;
 	
+	//called once when the game is created
 	@Override
 	public void create () {
 		
+		//for keyboard input
 		Gdx.input.setInputProcessor(this);
+		
+		//set screen size
+		Gdx.graphics.setDisplayMode(SCREEN_WIDTH, SCREEN_HEIGHT, false);
 		
 		player = new Player(100,200, new Texture("playerSpriteSheet.png"), 6, 8);
 		font = new BitmapFont();
 		font.setColor(Color.RED);
 		renderer = new ShapeRenderer();
-		
-		testEnemy = new Enemy( 200, 200, new Texture("enemy.png"), 4, 4);
-		
-		powerups.add(new Powerup(1, 500, 300, new Texture("pill.gif")));
 		
 		spriteBatch = new SpriteBatch();
 		font = new BitmapFont(false);
@@ -98,85 +103,136 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		Gdx.gl.glClearColor(0, 0, 0, 1);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		
+		//update frametime
 		delta = Gdx.graphics.getDeltaTime();
 		frameTime += delta;
 		
-		if(score >= 200)
-			screen = WIN_SCREEN;
+		//check which screen to draw
 		if(!playerAlive)
 			screen = LOSE_SCREEN;
 		if(screen == GAME_SCREEN)
 			drawGameScreen();
-		else if(screen == WIN_SCREEN)
-			drawWinScreen();
 		else if(screen == LOSE_SCREEN)
 			drawLoseScreen();
 
 	}
 	
+	//main game screen that has all the action
 	public void drawGameScreen(){
+		
+		//update player frames
 		player.updateFrameTime(frameTime);
 		player.update();
 		
-		if(invincible)
-			invincibilityCounter++;
+		//sets screen to game over if player's health is 0
+		if(playerHealth == 0)
+			screen = 2;
 		
-		updateEnemies();
+		updatePowerups();
 		
-		for(Enemy enemy : enemies){
-			enemy.updateFrameTime(frameTime);
-			enemy.update();
-		}
+		//draws the enemies at the start of each new level, and if they've already been drawn,
+		//it updates their frametime and moves them
+		updateEnemies();		
 		
+		//main method for shooting. shooting == true when LEFT_SHIFT is pressed
 		if(shooting){
 			shoot(player.getX(), player.getY(), player.getDirection(), playerPower);
 			shooting = false;
 			fired = true;
 		}
+		
+		//updates position of bullets. Fired == true when at least one bullet is on screen
 		updateBullets(fired);
 		
-		if(playerHealth == 0)
-			screen = 2;
+		//checks if player is touching any powerups
+		checkPowerupCollision();
 		
-		for(int j = bulletsToDelete.size()-1; j >=0; j--){					
-			bullets.remove(bulletsToDelete.get(j).intValue());
-		}
-		bulletsToDelete.clear();
-			
-		for(int j = enemiesToDelete.size()-1; j >=0; j--){
-			enemies.remove(enemiesToDelete.get(j).intValue());
-		}
-		enemiesToDelete.clear();
+		//method to remove bullets, enemies, and powerups from the screen if they've been destroyed
+		removeAssetsFromScreen();
 		
+		//checks player and enemy to see if they're in contact.
 		if(!invincible){
 			for(Enemy enemy : enemies)						
 				checkEnemyCollision(enemy);
 		}
+		
+		//deactivates player's invincibility after 120 frames.
 		if(invincibilityCounter >= 120){
 			invincible = false;
 			invincibilityCounter = 0;		
 		}
 		
-		checkPowerupCollision();
+		//draws all assets to screen
+		drawGameAssets();
 		
-		for(int j = powerupsToDelete.size()-1; j >= 0; j--){
-			powerups.remove(powerupsToDelete.get(j).intValue());
+		//if all the enemies are defeated, you level up and your powerup degrades
+		if(enemies.size() == 0){
+			level++;
+			powerupCounter--;
 		}
-		powerupsToDelete.clear();
-		
+	}
+	
+	public void drawGameAssets(){
 		spriteBatch.begin();
-		if(playerAlive)
-			spriteBatch.draw(player.getCurrentFrame(), player.getX(), player.getY());
+		spriteBatch.draw(player.getCurrentFrame(), player.getX(), player.getY());
 		for(Enemy enemy : enemies){
 			spriteBatch.draw(enemy.getCurrentFrame(), enemy.getX(), enemy.getY());
 		}
-		font.draw(spriteBatch, score.toString(), 20, 470);
+	
+		font.draw(spriteBatch, "Level: " + level.toString(), 20, 470);
+		font.draw(spriteBatch, "Score: " + score.toString(), 20, 450);
 		for(Powerup powerup : powerups){
 			spriteBatch.draw(powerup.getTexture(), powerup.getX(), powerup.getY(), 20, 20);
 		}
 		spriteBatch.draw((drawHealthBar()), 530, 450, 100, 15);
 		spriteBatch.end();
 	}
+	
+	public void updatePowerups(){
+		//add powerups to screen if none exist and player doesn't already have a power
+		if(playerPower == 0 && powerups.size() == 0){
+			powerups.add(new Powerup(1, (float)Math.random()*615, (float)Math.random()*455, new Texture("pill.gif")));
+		}
+		
+		//resets player's power after 3 levels
+		if(powerupCounter <= 0){
+			powerupPlayer(0);
+			powerupCounter = 3;
+		}
+		
+		//increments player invincibility after contact with an enemy
+		if(invincible)
+			invincibilityCounter++;
+	}
+	
+	public void removeAssetsFromScreen(){
+		//removes bullets if they leave the screen or come in contact with an enemy
+		for(int j = bulletsToDelete.size()-1; j >=0; j--){	
+			try{
+			bullets.remove(bulletsToDelete.get(j).intValue());
+			}catch(Exception e){
+				
+			}
+		}
+		bulletsToDelete.clear();
+			
+		//removes enemies that have been shot
+		for(int j = enemiesToDelete.size()-1; j >=0; j--){
+			try{
+			enemies.remove(enemiesToDelete.get(j).intValue());
+			}catch(Exception e){
+				
+			}
+		}
+		enemiesToDelete.clear();
+		
+		//removes powerups from screen if player is in contact
+		for(int j = powerupsToDelete.size()-1; j >= 0; j--){
+			powerups.remove(powerupsToDelete.get(j).intValue());
+		}
+		powerupsToDelete.clear();
+	}
+	
 	
 	public void drawWinScreen(){
 		spriteBatch.begin();
@@ -185,12 +241,14 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 
 	}
 	
+	//drawn if playerHealth == 0;
 	public void drawLoseScreen(){
 		spriteBatch.begin();
 		font.draw(spriteBatch, "YOU LOSE!", 275, 300);
 		spriteBatch.end();
 	}
 	
+	//draws various levels of the health bar
 	public Texture drawHealthBar(){
 		if(playerHealth == 6)
 			return new Texture("fullHealth.png");
@@ -209,6 +267,7 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		}
 	}
 	
+	//moves the bullets and checks for collision with enemies
 	public void updateBullets(boolean fired){
 		if(fired){
 			int i = 0;
@@ -244,9 +303,11 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 					bullet.setY(bullet.getY() - 10);
 					drawBullet(bullet);
 				}
+				//adds bullet to list to be deleted if it exits the game screen
 				if(!inScreen(bullet.getX(), bullet.getY())){
 					bulletsToDelete.add(i);
 				}
+				//adds a bullet to the list to be deleted if it collides with an enemy
 				for(Enemy enemy : enemies){
 					if(bullet.isTouching(enemy.getHitbox())){
 						bulletsToDelete.add(i);
@@ -268,25 +329,42 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		}
 	}
 	
+	//draws enemies to the screen if there are no more on screen. # of enemies varies with the level
 	public void updateEnemies(){
-		Enemy enemyToAdd;
-		float x, y;
-		if(enemies.size() < 7){
-			for(int i = (7 - enemies.size()); i > 0 ;i--){
-				x = (float)Math.random()*500;
-				y = (float)Math.random()*300;
-				enemyToAdd = new Enemy(x, y, new Texture("enemy.png"), 4, 4);
-				while(player.isTouching(enemyToAdd.getHitbox())){
-					x = (float)Math.random()*500;
-					y = (float)Math.random()*300;
-					enemyToAdd.setX(x);
-					enemyToAdd.setY(y);
+
+		float x = 0, y = 0;
+		int side, direction = DOWN;
+		if(enemies.size() == 0){
+			for(int i = (level); i > 0 ;i--){
+				//draws enemies on 1 of the 4 sides of the screen at random
+				side = (int)(Math.random()*4);
+				if(side == 0){
+					x = 0;
+					y = (float)(Math.random()*440);
+					direction = RIGHT;
+				}else if(side == 1){
+					y = 440;
+					x = (float)(Math.random()*620);
+					direction = DOWN;
+				}else if(side == 2){
+					x = 620;
+					y = (float)(Math.random()*440);
+					direction = LEFT;
+				}else if(side == 3){
+					y = 0;
+					x = (float)(Math.random()*620);
+					direction = UP;
 				}
-				enemies.add(new Enemy(x, y, new Texture("enemy.png"),4,4));
+				enemies.add(new Enemy(x,y, new Texture("enemy.png"),4,4, direction));
 			}
+		}
+		for(Enemy enemy : enemies){
+			enemy.updateFrameTime(frameTime);
+			enemy.update();
 		}
 	}
 	
+	//checks if player is touching an enemy, if so, player loses health, gains invincibility for 120 frames
 	public boolean checkEnemyCollision(Enemy enemy){
 		if(player.isTouching(enemy.getHitbox())){
 			playerHealth--;
@@ -296,12 +374,14 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		return false;
 	}
 	
+	//checks if player is touching any powerups. if so, adds it to list to be deleted and gives the player that specific powerup
 	public boolean checkPowerupCollision(){
 		for(Powerup powerup : powerups){
 			int i = 0;
 			if(player.isTouching(powerup.getHitbox())){
 					powerupPlayer(powerup.getPowerupAbility());
 					powerupsToDelete.add(i);
+					powerupCounter = 3;
 				return true;
 			}
 			i++;
@@ -310,13 +390,16 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		return false;
 	}
 	
+	//changes the player's shot type (powerup)
 	public void powerupPlayer(int powerupType){
 		playerPower = powerupType;
 	}
 	
+	//adds a new bullet to the arraylist of bullets based on the direction the player is facing
 	public void shoot(float x, float y, int dir, int shotType){
 		if(dir == DOWN){
 			bullets.add(new Bullet(player.getX() + 15, player.getY(), DOWN));
+			//if the shotype is tripleshot, adds two more bullets in adjacent directions
 			if(shotType == TRIPLE_SHOT){
 				bullets.add(new Bullet(player.getX() + 15, player.getY(), DOWNRIGHT));
 				bullets .add(new Bullet(player.getX() + 15, player.getY(), DOWNLEFT));
@@ -366,6 +449,7 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		}
 	}
 	
+	//method for drawing an individual bullet to the gamescreen
 	public void drawBullet(Bullet bullet){
 		renderer.begin(ShapeType.Filled);
 		renderer.setColor(Color.RED);
@@ -402,6 +486,7 @@ public class FirstGame implements ApplicationListener, InputProcessor {
 		return frameTime;
 	}
 	
+	//checks to see if a bullet is in the gamescreen
 	public boolean inScreen(float x, float y){
 		boolean inX = false, inY = false;
 		if(x > 0 && x < Gdx.graphics.getWidth())

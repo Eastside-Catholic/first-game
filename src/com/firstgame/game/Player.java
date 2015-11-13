@@ -36,18 +36,21 @@ public class Player {
 		hitbox = new Rectangle(position.x , position.y, 32, 32);
 	}
 	
+	//checks what keys the user is pressing and calls movement methods accordingly
 	public void update(){
 		checkKeysPressed();
 		setPlayerDirection();
 		move(playerMoving);
 	}
 	
+	//method to check collision of player with another object
 	public boolean isTouching(Rectangle otherHitbox){
 		if(hitbox.overlaps(otherHitbox))
 			return true;
 		return false;
 	}
 	
+	//updates the player and hitbox's position
 	public void move(boolean moving){
 		if(moving){
 			playerMove(direction);
@@ -61,6 +64,7 @@ public class Player {
 		frameTime = ft;
 	}
 	
+	//physically changes players position and sets corrisponding animation
 	public void playerMove(int dir){
 		if(dir == UP){
 			animation = new Animation(0.10f, frames[3]);

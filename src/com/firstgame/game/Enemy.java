@@ -11,7 +11,7 @@ public class Enemy {
 
 	Vector2 position;
 	final int DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3, DOWNLEFT = 4, DOWNRIGHT = 5, UPLEFT = 6, UPRIGHT = 7;
-	int direction = DOWN;
+	int direction;
 	Texture spriteSheet;
 	TextureRegion currentFrame;
 	TextureRegion[][] frames;
@@ -23,26 +23,56 @@ public class Enemy {
 	
 	int enemyMoveNumber = 1;
 	int life = 20;
+	
+	boolean firstMove = true;
 
-	public Enemy(float x, float y, Texture texture, int w, int h) {
+	public Enemy(float x, float y, Texture texture, int w, int h, int initialDirection) {
 		position = new Vector2(x, y);
 		spriteSheet = texture;
 		width = w;
 		height = h;
 		frames = TextureRegion.split(spriteSheet, spriteSheet.getWidth()/w, spriteSheet.getHeight()/h);
 		animation = new Animation(0.10f, frames[0]);
-		hitbox = new Rectangle(position.x + 9, position.y + 3, 47, 64);
+		hitbox = new Rectangle(position.x + 9, position.y + 3, 55, 55);
+		direction = initialDirection;
+		currentFrame = animation.getKeyFrame(frameTime, true);
 	}
 	
 	public void update(){
+		//makes sure that the first move of the enemy is outward from the side it came rather than in a random direction
+		if(firstMove){
+			enemyMoveNumber = 100;
+			firstMove = false;
+		}
 		move();
 	}
 	
+	//responsible for physically moving the enemy
 	public void move(){
+		//if enemy moves into a wall, makes it pick a new direction
+		if(position.y <= 0){
+			position.y = 0;
+			enemyMoveNumber = 0;
+		}
+		if(position.y + currentFrame.getRegionHeight() >= 480){
+			position.y = 480-currentFrame.getRegionHeight();
+			enemyMoveNumber = 0;
+		}
+		if(position.x <= 0){
+			position.x = 0;
+			enemyMoveNumber = 0;
+		}
+		if(position.x + currentFrame.getRegionWidth() >= 640){
+			position.x = 640 - currentFrame.getRegionWidth();
+			enemyMoveNumber = 0;
+		}
+		
+		//randomly selects a new direction for the enemy to move if it's done with its previous move
 		if(enemyMoveNumber <= 0){
 			direction = (int)(Math.random()*4);
 			enemyMoveNumber = (int)(Math.random()*100);
-		}else if(direction == UP){
+		}
+		if(direction == UP){
 			position.y += moveSpeed;
 			enemyMoveNumber -= moveSpeed;
 		}else if(direction == DOWN){
@@ -65,6 +95,7 @@ public class Enemy {
 		frameTime = ft;
 	}
 	
+	//sets the correct animation based on direction of movement
 	public void animate(){
 		if(direction == UP){
 			animation = new Animation(0.10f, frames[3]);
@@ -95,14 +126,6 @@ public class Enemy {
 			position.y -= moveSpeed;
 			animation = new Animation(0.10f, frames[5]);
 		}
-		if(position.y <= 0)
-			position.y = 0;
-		if(position.y >= 447)
-			position.y = 447;
-		if(position.x <= 0)
-			position.x = 0;
-		if(position.x + 30 >= 640)
-			position.x = 610;
 	}
 	
 	public TextureRegion getCurrentFrame(){
